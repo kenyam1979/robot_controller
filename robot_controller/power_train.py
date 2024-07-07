@@ -9,6 +9,7 @@ import threading
 MAX_MV = 100
 INTERVAL = 0.1
 
+# Motor class sending PWM signal to physical motor
 class Motor():
 
     def __init__(self, pi, p1, p2):
@@ -35,7 +36,7 @@ class Motor():
             self.pi.set_PWM_dutycycle(self.pin1, 0)
             self.pi.set_PWM_dutycycle(self.pin2, -mv)
         
-        
+# PID class calc manipulating variables by PID
 class PID():
     error_P_prev = 0.0
     error_I = 0.0
@@ -70,7 +71,7 @@ class PID():
         return mv
 
 
-
+# Power train class to process an entire control of motors
 class PowerTrain (Node):
     
     target_speed_R = 0.0
