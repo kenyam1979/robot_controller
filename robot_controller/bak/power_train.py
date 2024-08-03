@@ -7,7 +7,10 @@ import pigpio
 import threading
 
 MAX_MV = 100
-INTERVAL = 0.1
+SNSR_FREQ = 30
+CTRL_FREQ = 10
+INTERVAL = 1/ CTRL_FREQ
+WHEEL_DIAMETER = 0.07
 
 # Motor class sending PWM signal to physical motor
 class Motor():
@@ -22,7 +25,6 @@ class Motor():
         self.pi.set_PWM_frequency(self.pin2, 60)
         self.pi.set_PWM_range(self.pin1, MAX_MV)
         self.pi.set_PWM_range(self.pin2, MAX_MV)
-
 
     def stop(self):
         self.pi.set_PWM_dutycycle(self.pin1, 0)
@@ -85,23 +87,23 @@ class PowerTrain (Node):
                 Twist,
                 'cmd_vel',
                 self.cmdvel_listener_cb,
-                30)
+                SNSR_FREQ)
         
         self.sub2 = self.create_subscription(
                 MotorSpeed,
                 'motor_speed',
                 self.mtsp_listener_cb,
-                30)
+                SNSR_FREQ)
 
     def cmdvel_listener_cb(self, msg):
         self.get_logger().info(f'linear.x={msg.linear.x} angular.z={msg.angular.z}')
-        self.target_speed_R = (msg.linear.x + msg.angular.z) * 200
-        self.target_speed_L = (msg.linear.x - msg.angular.z) * 200
+        self.target_speed_R = (msg.linear.x + msg.angular.z) * 1
+        self.target_speed_L = (msg.linear.x - msg.angular.z) * 1
 
     def mtsp_listener_cb(self, msg):
         #self.get_logger().info(f'right={msg.right}, left={msg.left}')
-        self.motor_speed_R = msg.right * 3.5
-        self.motor_speed_L = msg.left * 3.5
+        self.motor_speed_R = msg.right * WHEEL_DIAMETER / 2.0
+        self.motor_speed_L = msg.left * WHEEL_DIAMETER / 2.0
         
     def drive(self):
 
