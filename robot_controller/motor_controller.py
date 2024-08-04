@@ -1,19 +1,20 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
-#from robot_interfaces.msg import MotorSpeed
+from geometry_msgs.msg import Twist, TransformStamped, Quaternion
+from nav_msgs.msg import Odometry
+import tf_transformations as tft
+from robot_interfaces.msg import MotorSpeed
 import time
 import pigpio
 import math
 #import threading
 
 MAX_MV = 100
-SNSR_FREQ = 30
-CTRL_FREQ = 10
-INTERVAL = 1/ CTRL_FREQ
-WHEEL_DIAMETER = 0.07
-WHEEL_RADIUS = WHEEL_DIAMETER / 2.0
-CAR_WIDTH = 0.125
+CTRL_FREQ = 100                      # Hz
+INTERVAL = 1/ CTRL_FREQ             # Sec
+WHEEL_DIAMETER = 0.07               # Meter
+WHEEL_RADIUS = WHEEL_DIAMETER / 2.0 # Meter
+CAR_WIDTH = 0.125                   # Meter
 
 
 ##### Motor #####
@@ -78,23 +79,15 @@ class MotorEncoder():
         global count_R
         global count_L
 
-        vel_R = ((count_R - self.prev_count_R)/40/self.interval) * 2*math.pi * WHEEL_DIAMETER / 2.0
-        vel_L = ((count_L - self.prev_count_L)/40/self.interval) * 2*math.pi * WHEEL_DIAMETER / 2.0
-        ang_R =((count_R - self.prev_count_R)/40/self.interval) * 2*math.pi
+        vel_R = ((count_R - self.prev_count_R)/40/self.interval) * 2*math.pi * WHEEL_RADIUS
+        vel_L = ((count_L - self.prev_count_L)/40/self.interval) * 2*math.pi * WHEEL_RADIUS
+        ang_R = ((count_R - self.prev_count_R)/40/self.interval) * 2*math.pi
         ang_L = ((count_L - self.prev_count_L)/40/self.interval) * 2*math.pi
         self.prev_count_R = count_R 
         self.prev_count_L = count_L
-        print(f'Motor speed (m/s) Left={vel_L}, Right={vel_R}, Angular speed (rad/s) Left={ang_L}, Right={ang_R}')
+        # print(f'Motor speed (m/s) Left={vel_L}, Right={vel_R}, Angular speed (rad/s) Left={ang_L}, Right={ang_R}')
         return (vel_L, vel_R, ang_L, ang_R)
 
-    # def get_motor_angular_speed(self):
-    #     global count_R
-    #     global count_L
-
-    #     self.prev_count_R = count_R 
-    #     self.prev_count_L = count_L
-    #     print(f'Motor angular speed (rad/s) Left={ang_L}, Right={ang_R}')
-    #     return (ang_L, ang_R)
 
 ##### PID controller #####
 # PID class calculates manipulating variables by PID
@@ -131,27 +124,38 @@ class PID():
         print(f'****** mv={mv}')
         return mv
 
-##### Deadreckoning #####
+##### Wheel Odom #####
 # Deadreckoning class calculates current position
-class DeadReckoning():
-    x = 0
-    y = 0
-    th = 0
+class WheelOdom():
+
+    delta_x = 0.0
+    delta_y = 0.0
+    delta_th = 0.0
+    x = 0.0
+    y = 0.0
+    th = 0.0
+    left = 0.0
+    right = 0.0
     interval = INTERVAL
 
     def __init__(self):
         ...
 
-    def get_position(self, a_L, a_R):
-        delta_x = (WHEEL_RADIUS / 2.0) * (a_R + a_L) * math.cos(self.th) * self.interval
-        delta_y = (WHEEL_RADIUS / 2.0) * (a_R + a_L) * math.sin(self.th) * self.interval
-        delta_th = (WHEEL_RADIUS / CAR_WIDTH) * (a_R - a_L) * self.interval 
+    def dead_reckoning(self, a_L, a_R):
+        self.left = a_L
+        self.right =a_R
 
-        self.x += delta_x
-        self.y += delta_y
-        self.th += delta_th
+        self.delta_x = (WHEEL_RADIUS / 2.0) * (a_R + a_L) * math.cos(self.th) 
+        self.delta_y = (WHEEL_RADIUS / 2.0) * (a_R + a_L) * math.sin(self.th)
+        self.delta_th = (WHEEL_RADIUS / CAR_WIDTH) * (a_R - a_L) 
 
+        self.x += self.delta_x * self.interval
+        self.y += self.delta_y * self.interval
+        self.th += self.delta_th * self.interval
+
+        print(f'###### Speed x={self.delta_x}, y={self.delta_y}, th={self.delta_th}')
         print(f'###### Position x={self.x}, y={self.y}, th={self.th}')
+
 
 
 #############################################################
@@ -163,25 +167,61 @@ class MotorController (Node):
     motor_speed_R = 0.0
     motor_speed_L = 0.0
 
+
     def __init__(self):
         super().__init__('motor_controller_node')
+        self.od = WheelOdom()
+
         self.sub1 = self.create_subscription(
                 Twist,
                 'cmd_vel',
                 self.cmdvel_listener_cb,
-                SNSR_FREQ)
-        
-        # self.sub2 = self.create_subscription(
-        #         MotorSpeed,
-        #         'motor_speed',
-        #         self.mtsp_listener_cb,
-        #         SNSR_FREQ)
+                CTRL_FREQ)
+
+        self.pub1 = self.create_publisher(
+                Odometry, 
+                'odom', 
+                CTRL_FREQ)
+        ## For debugging
+        self.pub2 = self.create_publisher(MotorSpeed, 'motor_speed', CTRL_FREQ)
+
+        self.timer = self.create_timer(INTERVAL, self.odom_publisher_cb)
 
     def cmdvel_listener_cb(self, msg):
         self.get_logger().info(f'linear.x={msg.linear.x} angular.z={msg.angular.z}')
         self.target_speed_R = (msg.linear.x + msg.angular.z/2.0)
         self.target_speed_L = (msg.linear.x - msg.angular.z/2.0)
-        
+
+    def odom_publisher_cb(self):
+        now = self.get_clock().now()
+        t = TransformStamped()
+
+        odom = Odometry()
+        odom.header.stamp = now.to_msg()
+        odom.header.frame_id = '/odom_link'
+        odom.child_frame_id = '/base_link'
+
+        odom.pose.pose.position.x = self.od.x
+        odom.pose.pose.position.y = self.od.y
+        odom.pose.pose.position.z = 0.0
+        qt = tft.quaternion_from_euler(0.0, 0.0, self.od.th)
+        odom.pose.pose.orientation = Quaternion(x=qt[1], y=qt[2], z=qt[3], w=qt[3])
+
+        odom.twist.twist.linear.x = (self.od.left + self.od.right) * WHEEL_RADIUS / 2.0
+        odom.twist.twist.linear.y = 0.0
+        odom.twist.twist.linear.z = 0.0
+        odom.twist.twist.angular.x = 0.0
+        odom.twist.twist.angular.y = 0.0
+        odom.twist.twist.angular.z = self.od.delta_th
+        self.pub1.publish(odom)
+
+        ## For debugging
+        ms = MotorSpeed()
+        ms.left = self.od.left * WHEEL_RADIUS
+        ms.right = self.od.right * WHEEL_RADIUS
+        self.pub2.publish(ms)
+
+
     def drive(self):
 
         pi = pigpio.pi()
@@ -190,7 +230,6 @@ class MotorController (Node):
         pid_R = PID()
         pid_L = PID()
         enc = MotorEncoder(pi, 10, 2)
-        dr = DeadReckoning()
 
         back_flg_R = 1.0
         back_flg_L = 1.0
@@ -219,8 +258,7 @@ class MotorController (Node):
                 mv_L = pid_L.get_manipulating_var(self.target_speed_L, back_flg_L*self.motor_speed_L)
                 motor_L.set_manipulating_var(mv_L)
 
-
-            dr.get_position(back_flg_L*a_L, back_flg_R*a_R)
+            self.od.dead_reckoning(back_flg_L*a_L, back_flg_R*a_R)
 
             rclpy.spin_once(self, timeout_sec=INTERVAL)
             #time.sleep(INTERVAL)
