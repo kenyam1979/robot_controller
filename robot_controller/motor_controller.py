@@ -15,7 +15,7 @@ CTRL_FREQ = 30                      # Hz
 INTERVAL = 1/ CTRL_FREQ             # Sec
 WHEEL_DIAMETER = 0.07               # Meter
 WHEEL_RADIUS = WHEEL_DIAMETER / 2.0 # Meter
-CAR_WIDTH = 0.125                   # Meter
+CAR_WIDTH = 0.13                    # Meter
 
 
 ##### Motor #####
