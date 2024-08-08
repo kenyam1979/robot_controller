@@ -2,15 +2,16 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, TransformStamped, Quaternion
 from nav_msgs.msg import Odometry
-import tf_transformations as tft
 from robot_interfaces.msg import MotorSpeed
+import tf_transformations as tft
+from tf2_ros.transform_broadcaster import TransformBroadcaster
 import time
 import pigpio
 import math
 #import threading
 
 MAX_MV = 100
-CTRL_FREQ = 100                      # Hz
+CTRL_FREQ = 30                      # Hz
 INTERVAL = 1/ CTRL_FREQ             # Sec
 WHEEL_DIAMETER = 0.07               # Meter
 WHEEL_RADIUS = WHEEL_DIAMETER / 2.0 # Meter
@@ -120,8 +121,8 @@ class PID():
             mv = -MAX_MV
 
         error_P_prev = error_P
-        print(f'****** target={tar_speed},current={cur_speed} ')
-        print(f'****** mv={mv}')
+        # print(f'****** target={tar_speed},current={cur_speed} ')
+        # print(f'****** mv={mv}')
         return mv
 
 ##### Wheel Odom #####
@@ -153,7 +154,7 @@ class WheelOdom():
         self.y += self.delta_y * self.interval
         self.th += self.delta_th * self.interval
 
-        print(f'###### Speed x={self.delta_x}, y={self.delta_y}, th={self.delta_th}')
+        # print(f'###### Speed x={self.delta_x}, y={self.delta_y}, th={self.delta_th}')
         print(f'###### Position x={self.x}, y={self.y}, th={self.th}')
 
 
@@ -178,10 +179,13 @@ class MotorController (Node):
                 self.cmdvel_listener_cb,
                 CTRL_FREQ)
 
+        self.tfb = TransformBroadcaster(self)
         self.pub1 = self.create_publisher(
                 Odometry, 
                 'odom', 
                 CTRL_FREQ)
+
+
         ## For debugging
         self.pub2 = self.create_publisher(MotorSpeed, 'motor_speed', CTRL_FREQ)
 
@@ -194,19 +198,29 @@ class MotorController (Node):
 
     def odom_publisher_cb(self):
         now = self.get_clock().now()
-        t = TransformStamped()
+
+        qt = tft.quaternion_from_euler(0.0, 0.0, self.od.th)
+
+        tfs = TransformStamped()
+        tfs.header.stamp = now.to_msg()
+        tfs.header.frame_id = 'odom'
+        tfs.child_frame_id = 'base_link'
+        tfs.transform.translation.x = self.od.x
+        tfs.transform.translation.y = self.od.y
+        tfs.transform.translation.z = 0.0
+        tfs.transform.rotation = Quaternion(x=qt[0], y=qt[1], z=qt[2], w=qt[3])
+        self.tfb.sendTransform(tfs)
 
         odom = Odometry()
         odom.header.stamp = now.to_msg()
-        odom.header.frame_id = '/odom_link'
-        odom.child_frame_id = '/base_link'
+        odom.header.frame_id = 'odom'
 
         odom.pose.pose.position.x = self.od.x
         odom.pose.pose.position.y = self.od.y
         odom.pose.pose.position.z = 0.0
-        qt = tft.quaternion_from_euler(0.0, 0.0, self.od.th)
-        odom.pose.pose.orientation = Quaternion(x=qt[1], y=qt[2], z=qt[3], w=qt[3])
+        odom.pose.pose.orientation = Quaternion(x=qt[0], y=qt[1], z=qt[2], w=qt[3])
 
+        odom.child_frame_id = 'base_link'
         odom.twist.twist.linear.x = (self.od.left + self.od.right) * WHEEL_RADIUS / 2.0
         odom.twist.twist.linear.y = 0.0
         odom.twist.twist.linear.z = 0.0
