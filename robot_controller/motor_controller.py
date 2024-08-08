@@ -142,8 +142,8 @@ class WheelOdom():
         ...
 
     def dead_reckoning(self, vel_L, vel_R):
-        self.left = a_L
-        self.right =a_R
+        self.left = vel_L
+        self.right =vel_R
 
         self.delta_x = (vel_R + vel_L) / 2.0 * math.cos(self.th) 
         self.delta_y = (vel_R + vel_L) / 2.0 * math.sin(self.th)
@@ -222,7 +222,7 @@ class MotorController (Node):
         odom.pose.pose.orientation = qt
 
         odom.child_frame_id = 'base_link'
-        odom.twist.twist.linear.x = (self.od.left + self.od.right) * WHEEL_RADIUS / 2.0
+        odom.twist.twist.linear.x = (self.od.left + self.od.right) / 2.0
         odom.twist.twist.linear.y = 0.0
         odom.twist.twist.linear.z = 0.0
         odom.twist.twist.angular.x = 0.0
@@ -232,8 +232,8 @@ class MotorController (Node):
 
         ## For debugging
         ms = MotorSpeed()
-        ms.left = self.od.left * WHEEL_RADIUS
-        ms.right = self.od.right * WHEEL_RADIUS
+        ms.left = self.od.left
+        ms.right = self.od.right
         self.pub2.publish(ms)
 
 
@@ -255,15 +255,6 @@ class MotorController (Node):
         while rclpy.ok():
             self.motor_speed_L, self.motor_speed_R = enc.get_motor_speed()
 
-            if self.target_speed_R < 0.01 and self.target_speed_R > -0.01:
-                motor_R.stop()
-                pid_R.reset()
-            else:
-                if self.target_speed_R <0:
-                    back_flg_R = -1.0
-                mv_R = pid_R.get_manipulating_var(self.target_speed_R, back_flg_R*self.motor_speed_R)
-                motor_R.set_manipulating_var(mv_R)
-            
             if self.target_speed_L < 0.01 and self.target_speed_L > -0.01:
                 motor_L.stop()
                 pid_L.reset()
@@ -271,7 +262,17 @@ class MotorController (Node):
                 if self.target_speed_L <0:
                     back_flg_L = -1.0
                 mv_L = pid_L.get_manipulating_var(self.target_speed_L, back_flg_L*self.motor_speed_L)
-                motor_L.set_manipulating_var(mv_L)
+                motor_L.set_manipulating_var(mv_L * 0.8) # Calibration by multipling coeff
+
+            if self.target_speed_R < 0.01 and self.target_speed_R > -0.01:
+                motor_R.stop()
+                pid_R.reset()
+            else:
+                if self.target_speed_R <0:
+                    back_flg_R = -1.0
+                mv_R = pid_R.get_manipulating_var(self.target_speed_R, back_flg_R*self.motor_speed_R)
+                motor_R.set_manipulating_var(mv_R) 
+            
 
             self.od.dead_reckoning(back_flg_L*self.motor_speed_L, back_flg_R*self.motor_speed_R)
 
