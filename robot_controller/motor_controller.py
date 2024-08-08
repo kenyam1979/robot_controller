@@ -82,12 +82,10 @@ class MotorEncoder():
 
         vel_R = ((count_R - self.prev_count_R)/40/self.interval) * 2*math.pi * WHEEL_RADIUS
         vel_L = ((count_L - self.prev_count_L)/40/self.interval) * 2*math.pi * WHEEL_RADIUS
-        ang_R = ((count_R - self.prev_count_R)/40/self.interval) * 2*math.pi
-        ang_L = ((count_L - self.prev_count_L)/40/self.interval) * 2*math.pi
         self.prev_count_R = count_R 
         self.prev_count_L = count_L
         # print(f'Motor speed (m/s) Left={vel_L}, Right={vel_R}, Angular speed (rad/s) Left={ang_L}, Right={ang_R}')
-        return (vel_L, vel_R, ang_L, ang_R)
+        return (vel_L, vel_R)  # Return velocity (m/s)
 
 
 ##### PID controller #####
@@ -125,6 +123,7 @@ class PID():
         # print(f'****** mv={mv}')
         return mv
 
+
 ##### Wheel Odom #####
 # Deadreckoning class calculates current position
 class WheelOdom():
@@ -142,19 +141,19 @@ class WheelOdom():
     def __init__(self):
         ...
 
-    def dead_reckoning(self, a_L, a_R):
+    def dead_reckoning(self, vel_L, vel_R):
         self.left = a_L
         self.right =a_R
 
-        self.delta_x = (WHEEL_RADIUS / 2.0) * (a_R + a_L) * math.cos(self.th) 
-        self.delta_y = (WHEEL_RADIUS / 2.0) * (a_R + a_L) * math.sin(self.th)
-        self.delta_th = (WHEEL_RADIUS / CAR_WIDTH) * (a_R - a_L) 
+        self.delta_x = (vel_R + vel_L) / 2.0 * math.cos(self.th) 
+        self.delta_y = (vel_R + vel_L) / 2.0 * math.sin(self.th)
+        self.delta_th = (vel_R - vel_L) / CAR_WIDTH
 
         self.x += self.delta_x * self.interval
         self.y += self.delta_y * self.interval
         self.th += self.delta_th * self.interval
 
-        # print(f'###### Speed x={self.delta_x}, y={self.delta_y}, th={self.delta_th}')
+        print(f'###### Speed x={self.delta_x}, y={self.delta_y}, th={self.delta_th}')
         print(f'###### Position x={self.x}, y={self.y}, th={self.th}')
 
 
@@ -193,14 +192,15 @@ class MotorController (Node):
 
     def cmdvel_listener_cb(self, msg):
         self.get_logger().info(f'linear.x={msg.linear.x} angular.z={msg.angular.z}')
-        self.target_speed_R = (msg.linear.x + msg.angular.z/2.0)
-        self.target_speed_L = (msg.linear.x - msg.angular.z/2.0)
+        self.target_speed_R = msg.linear.x + msg.angular.z * CAR_WIDTH   # linear.x (m/s) and angular.z (rad/s)
+        self.target_speed_L = msg.linear.x - msg.angular.z * CAR_WIDTH
 
     def odom_publisher_cb(self):
         now = self.get_clock().now()
+        qt_tmp = tft.quaternion_from_euler(0.0, 0.0, self.od.th)
+        qt = Quaternion(x=qt[0], y=qt[1], z=qt[2], w=qt[3])
 
-        qt = tft.quaternion_from_euler(0.0, 0.0, self.od.th)
-
+        # Send tf
         tfs = TransformStamped()
         tfs.header.stamp = now.to_msg()
         tfs.header.frame_id = 'odom'
@@ -208,9 +208,10 @@ class MotorController (Node):
         tfs.transform.translation.x = self.od.x
         tfs.transform.translation.y = self.od.y
         tfs.transform.translation.z = 0.0
-        tfs.transform.rotation = Quaternion(x=qt[0], y=qt[1], z=qt[2], w=qt[3])
+        tfs.transform.rotation = qt
         self.tfb.sendTransform(tfs)
 
+        # Send odom
         odom = Odometry()
         odom.header.stamp = now.to_msg()
         odom.header.frame_id = 'odom'
@@ -218,7 +219,7 @@ class MotorController (Node):
         odom.pose.pose.position.x = self.od.x
         odom.pose.pose.position.y = self.od.y
         odom.pose.pose.position.z = 0.0
-        odom.pose.pose.orientation = Quaternion(x=qt[0], y=qt[1], z=qt[2], w=qt[3])
+        odom.pose.pose.orientation = qt
 
         odom.child_frame_id = 'base_link'
         odom.twist.twist.linear.x = (self.od.left + self.od.right) * WHEEL_RADIUS / 2.0
@@ -252,7 +253,7 @@ class MotorController (Node):
 
 
         while rclpy.ok():
-            self.motor_speed_L, self.motor_speed_R, a_L, a_R = enc.get_motor_speed()
+            self.motor_speed_L, self.motor_speed_R = enc.get_motor_speed()
 
             if self.target_speed_R < 0.01 and self.target_speed_R > -0.01:
                 motor_R.stop()
@@ -272,7 +273,7 @@ class MotorController (Node):
                 mv_L = pid_L.get_manipulating_var(self.target_speed_L, back_flg_L*self.motor_speed_L)
                 motor_L.set_manipulating_var(mv_L)
 
-            self.od.dead_reckoning(back_flg_L*a_L, back_flg_R*a_R)
+            self.od.dead_reckoning(back_flg_L*self.motor_speed_L, back_flg_R*self.motor_speed_R)
 
             rclpy.spin_once(self, timeout_sec=INTERVAL)
             #time.sleep(INTERVAL)
