@@ -198,7 +198,7 @@ class MotorController (Node):
     def odom_publisher_cb(self):
         now = self.get_clock().now()
         qt_tmp = tft.quaternion_from_euler(0.0, 0.0, self.od.th)
-        qt = Quaternion(x=qt[0], y=qt[1], z=qt[2], w=qt[3])
+        qt = Quaternion(x=qt_tmp[0], y=qt_tmp[1], z=qt_tmp[2], w=qt_tmp[3])
 
         # Send tf
         tfs = TransformStamped()
