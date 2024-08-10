@@ -119,8 +119,8 @@ class PID():
             mv = -MAX_MV
 
         error_P_prev = error_P
-        # print(f'****** target={tar_speed},current={cur_speed} ')
-        # print(f'****** mv={mv}')
+        # print(f'##### <PID> ##### target={tar_speed},current={cur_speed} ')
+        # print(f'##### <PID> DDDD mv={mv}')
         return mv
 
 
@@ -136,6 +136,8 @@ class WheelOdom():
     th = 0.0
     left = 0.0
     right = 0.0
+    velocity = 0.0
+
     interval = INTERVAL
 
     def __init__(self):
@@ -149,12 +151,14 @@ class WheelOdom():
         self.delta_y = (vel_R + vel_L) / 2.0 * math.sin(self.th)
         self.delta_th = (vel_R - vel_L) / CAR_WIDTH
 
+        self.velocity = (vel_R + vel_L) / 2.0
+
         self.x += self.delta_x * self.interval
         self.y += self.delta_y * self.interval
         self.th += self.delta_th * self.interval
 
-        print(f'###### Speed x={self.delta_x}, y={self.delta_y}, th={self.delta_th}')
-        print(f'###### Position x={self.x}, y={self.y}, th={self.th}')
+        # print(f'###### Speed x={self.delta_x}, y={self.delta_y}, th={self.delta_th}')
+        # print(f'###### Position x={self.x}, y={self.y}, th={self.th}')
 
 
 
@@ -178,22 +182,22 @@ class MotorController (Node):
                 self.cmdvel_listener_cb,
                 CTRL_FREQ)
 
+
         self.tfb = TransformBroadcaster(self)
         self.pub1 = self.create_publisher(
                 Odometry, 
                 'odom', 
                 CTRL_FREQ)
 
-
         ## For debugging
-        self.pub2 = self.create_publisher(MotorSpeed, 'motor_speed', CTRL_FREQ)
+        # self.pub2 = self.create_publisher(MotorSpeed, 'motor_speed', CTRL_FREQ)
 
         self.timer = self.create_timer(INTERVAL, self.odom_publisher_cb)
 
     def cmdvel_listener_cb(self, msg):
-        self.get_logger().info(f'linear.x={msg.linear.x} angular.z={msg.angular.z}')
         self.target_speed_R = msg.linear.x + msg.angular.z * CAR_WIDTH   # linear.x (m/s) and angular.z (rad/s)
         self.target_speed_L = msg.linear.x - msg.angular.z * CAR_WIDTH
+        self.get_logger().info(f'linear.x={msg.linear.x} angular.z={msg.angular.z}, target_speed_L={self.target_speed_L}, target_speed_R={self.target_speed_R}')
 
     def odom_publisher_cb(self):
         now = self.get_clock().now()
@@ -222,7 +226,7 @@ class MotorController (Node):
         odom.pose.pose.orientation = qt
 
         odom.child_frame_id = 'base_link'
-        odom.twist.twist.linear.x = (self.od.left + self.od.right) / 2.0
+        odom.twist.twist.linear.x = self.od.velocity
         odom.twist.twist.linear.y = 0.0
         odom.twist.twist.linear.z = 0.0
         odom.twist.twist.angular.x = 0.0
@@ -230,11 +234,14 @@ class MotorController (Node):
         odom.twist.twist.angular.z = self.od.delta_th
         self.pub1.publish(odom)
 
+
+        self.get_logger().info(f'x={self.od.x} y={self.od.y}, th={self.od.th}, velocity={self.od.velocity}, angular speed={self.od.delta_th}')
+
         ## For debugging
-        ms = MotorSpeed()
-        ms.left = self.od.left
-        ms.right = self.od.right
-        self.pub2.publish(ms)
+        # ms = MotorSpeed()
+        # ms.left = self.od.left
+        # ms.right = self.od.right
+        # self.pub2.publish(ms)
 
 
     def drive(self):
@@ -246,13 +253,12 @@ class MotorController (Node):
         pid_L = PID()
         enc = MotorEncoder(pi, 10, 2)
 
-        back_flg_R = 1.0
-        back_flg_L = 1.0
-
         rclpy.spin_once(self)
 
 
         while rclpy.ok():
+            back_flg_R = 1.0
+            back_flg_L = 1.0
             self.motor_speed_L, self.motor_speed_R = enc.get_motor_speed()
 
             if self.target_speed_L < 0.01 and self.target_speed_L > -0.01:
@@ -262,7 +268,7 @@ class MotorController (Node):
                 if self.target_speed_L <0:
                     back_flg_L = -1.0
                 mv_L = pid_L.get_manipulating_var(self.target_speed_L, back_flg_L*self.motor_speed_L)
-                motor_L.set_manipulating_var(mv_L * 0.8) # Calibration by multipling coeff
+                motor_L.set_manipulating_var(mv_L * 0.85) # Calibration by multipling coeff
 
             if self.target_speed_R < 0.01 and self.target_speed_R > -0.01:
                 motor_R.stop()
