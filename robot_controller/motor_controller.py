@@ -94,7 +94,7 @@ class PID():
     error_P_prev = 0.0
     error_I = 0.0
     interval = INTERVAL
-    Kp = 50
+    Kp = 80
     Ki = 100
     Kd = 0.1
 
