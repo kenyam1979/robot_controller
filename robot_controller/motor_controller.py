@@ -268,7 +268,7 @@ class MotorController (Node):
                 if self.target_speed_L <0:
                     back_flg_L = -1.0
                 mv_L = pid_L.get_manipulating_var(self.target_speed_L, back_flg_L*self.motor_speed_L)
-                motor_L.set_manipulating_var(mv_L * 0.87) # Calibration by multipling coeff
+                motor_L.set_manipulating_var(mv_L * 0.97) # Calibration by multipling coeff
 
             if self.target_speed_R < 0.01 and self.target_speed_R > -0.01:
                 motor_R.stop()
