@@ -195,8 +195,8 @@ class MotorController (Node):
         self.timer = self.create_timer(INTERVAL, self.odom_publisher_cb)
 
     def cmdvel_listener_cb(self, msg):
-        self.target_speed_R = msg.linear.x + msg.angular.z * CAR_WIDTH   # linear.x (m/s) and angular.z (rad/s)
-        self.target_speed_L = msg.linear.x - msg.angular.z * CAR_WIDTH
+        self.target_speed_R = msg.linear.x + msg.angular.z * CAR_WIDTH / 2.0   # linear.x (m/s) and angular.z (rad/s)
+        self.target_speed_L = msg.linear.x - msg.angular.z * CAR_WIDTH / 2.0
         self.get_logger().info(f'linear.x={msg.linear.x} angular.z={msg.angular.z}, target_speed_L={self.target_speed_L}, target_speed_R={self.target_speed_R}')
 
     def odom_publisher_cb(self):
