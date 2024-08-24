@@ -255,6 +255,8 @@ class MotorController (Node):
 
         rclpy.spin_once(self)
 
+        # Data collection for analysis
+        f = open('data.csv', 'w', encoding='UTF-8')
 
         while rclpy.ok():
             back_flg_R = 1.0
@@ -282,8 +284,13 @@ class MotorController (Node):
 
             self.od.dead_reckoning(back_flg_L*self.motor_speed_L, back_flg_R*self.motor_speed_R)
 
+            # Data collection for analysis
+            print(f'{self.motor_speed_L},{self.motor_speed_R}', file=f)
+
             rclpy.spin_once(self, timeout_sec=INTERVAL)
             #time.sleep(INTERVAL)
+
+        f.close()
 
 def main(args=None):
     rclpy.init(args=args)
