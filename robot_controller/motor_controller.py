@@ -1,3 +1,6 @@
+import os
+import time
+
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, TransformStamped, Quaternion
@@ -5,10 +8,13 @@ from nav_msgs.msg import Odometry
 from robot_interfaces.msg import MotorSpeed
 import tf_transformations as tft
 from tf2_ros.transform_broadcaster import TransformBroadcaster
-import time
+
 import pigpio
+
 import math
-#import threading
+from numpy as np
+from pandas as pd
+from pykalman import KalmanFilter
 
 MAX_MV = 100
 CTRL_FREQ = 30                      # Hz
@@ -74,7 +80,31 @@ class MotorEncoder():
         self.pi.set_mode(p2, pigpio.INPUT)
         self.pi.set_pull_up_down(p2, pigpio.PUD_UP)
         cb_R = pi.callback(p1, pigpio.EITHER_EDGE, encoder_R_cb)
-        cb_L = pi.callback(p2, pigpio.EITHER_EDGE, encoder_L_cb)    
+        cb_L = pi.callback(p2, pigpio.EITHER_EDGE, encoder_L_cb)
+
+        data_path = '/home/ken/ros2_ws/src/robot_controller/analysis/'
+        observation_matrices = np.load(os.path.join(data_path, 'observation_matrices.npy'))
+        observation_covariance = np.load(os.path.join(data_path, 'observation_covariance.npy'))
+        transition_matrices = np.load(os.path.join(data_path, 'transition_matrices.npy'))
+        transition_covariance = np.load(os.path.join(data_path, 'transition_covariance.npy'))
+
+        # Initializing Kalman filter
+        OBS_DIM = 1
+        N_STATE = 10
+        self.current_state_mean_L = np.ones(N_STATE)
+        self.current_state_covariance_L = np.ones((N_STATE, N_STATE))
+        self.current_state_mean_R = np.ones(N_STATE)
+        self.current_state_covariance_R = np.ones((N_STATE, N_STATE))
+
+        self.kf = KalmanFilter(
+            n_dim_obs = OBS_DIM,
+            n_dim_state = N_STATE,
+            initial_state_mean = self.current_state_mean_L, 
+            initial_state_covariance = self.current_state_covariance_L,
+            observation_matrices = observation_matrices,
+            observation_covariance = observation_covariance,
+            transition_matrices = transition_matrices,
+            transition_covariance = transition_covariance)
 
     def get_motor_speed(self):
         global count_R
@@ -86,6 +116,32 @@ class MotorEncoder():
         self.prev_count_L = count_L
         # print(f'Motor speed (m/s) Left={vel_L}, Right={vel_R}, Angular speed (rad/s) Left={ang_L}, Right={ang_R}')
         return (vel_L, vel_R)  # Return velocity (m/s)
+
+    def get_motor_speed_kf(self):
+        global count_R
+        global count_L
+
+        vel_R = ((count_R - self.prev_count_R)/40/self.interval) * 2*math.pi * WHEEL_RADIUS
+        vel_L = ((count_L - self.prev_count_L)/40/self.interval) * 2*math.pi * WHEEL_RADIUS
+        self.prev_count_R = count_R 
+        self.prev_count_L = count_L
+
+        # Estimate true state with Kalman filter
+        self.current_state_mean_L, self.current_state_covariance_L = self.kf.filter_update(
+            self.current_state_mean_L, 
+            self.current_state_covariance_L, 
+            observation=vel_L)
+        vel_L_kf = self.kf.observation_matrices.dot(self.current_state_mean_L)
+
+        self.current_state_mean_R, self.current_state_covariance_R = self.kf.filter_update(
+            self.current_state_mean_R, 
+            self.current_state_covariance_R, 
+            observation=vel_R)
+        vel_R_kf = self.kf.observation_matrices.dot(self.current_state_mean_R)
+
+        return (vel_L_kf, vel_R_kf)  # Return velocity (m/s)
+
+    
 
 
 ##### PID controller #####
@@ -255,8 +311,8 @@ class MotorController (Node):
 
         rclpy.spin_once(self)
 
-        # Data collection for analysis
-        f = open('data.csv', 'w', encoding='UTF-8')
+        # Data collection for Kalman filter
+        # f = open('data.csv', 'w', encoding='UTF-8')
 
         while rclpy.ok():
             back_flg_R = 1.0
@@ -284,13 +340,14 @@ class MotorController (Node):
 
             self.od.dead_reckoning(back_flg_L*self.motor_speed_L, back_flg_R*self.motor_speed_R)
 
-            # Data collection for analysis
-            print(f'{self.motor_speed_L},{self.motor_speed_R}', file=f)
+            # Data collection for Kalman filter
+            # print(f'{self.motor_speed_L},{self.motor_speed_R}', file=f)
 
             rclpy.spin_once(self, timeout_sec=INTERVAL)
             #time.sleep(INTERVAL)
 
-        f.close()
+        # Data collection for Kalman filter 
+        # f.close()
 
 def main(args=None):
     rclpy.init(args=args)
