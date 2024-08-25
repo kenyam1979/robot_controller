@@ -12,8 +12,8 @@ from tf2_ros.transform_broadcaster import TransformBroadcaster
 import pigpio
 
 import math
-from numpy as np
-from pandas as pd
+import numpy as np
+import pandas as pd
 from pykalman import KalmanFilter
 
 MAX_MV = 100
@@ -87,9 +87,9 @@ class MotorEncoder():
         observation_covariance = np.load(os.path.join(data_path, 'observation_covariance.npy'))
         transition_matrices = np.load(os.path.join(data_path, 'transition_matrices.npy'))
         transition_covariance = np.load(os.path.join(data_path, 'transition_covariance.npy'))
+        print(observation_covariance)
 
         # Initializing Kalman filter
-        OBS_DIM = 1
         N_STATE = 10
         self.current_state_mean_L = np.ones(N_STATE)
         self.current_state_covariance_L = np.ones((N_STATE, N_STATE))
@@ -97,7 +97,7 @@ class MotorEncoder():
         self.current_state_covariance_R = np.ones((N_STATE, N_STATE))
 
         self.kf = KalmanFilter(
-            n_dim_obs = OBS_DIM,
+            n_dim_obs = 1,
             n_dim_state = N_STATE,
             initial_state_mean = self.current_state_mean_L, 
             initial_state_covariance = self.current_state_covariance_L,
@@ -317,7 +317,7 @@ class MotorController (Node):
         while rclpy.ok():
             back_flg_R = 1.0
             back_flg_L = 1.0
-            self.motor_speed_L, self.motor_speed_R = enc.get_motor_speed()
+            self.motor_speed_L, self.motor_speed_R = enc.get_motor_speed_kf()
 
             if self.target_speed_L < 0.01 and self.target_speed_L > -0.01:
                 motor_L.stop()
