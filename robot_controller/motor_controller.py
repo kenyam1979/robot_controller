@@ -18,7 +18,7 @@ from pykalman import KalmanFilter
 
 MAX_MV = 100
 CTRL_FREQ = 30                      # Hz
-INTERVAL = 1/ CTRL_FREQ             # Sec
+INTERVAL = 1 / CTRL_FREQ             # Sec
 WHEEL_DIAMETER = 0.07               # Meter
 WHEEL_RADIUS = WHEEL_DIAMETER / 2.0 # Meter
 CAR_WIDTH = 0.13                    # Meter
@@ -67,7 +67,7 @@ def encoder_L_cb(gpio, level, tick):
 
 # Motor photo-encoder
 class MotorEncoder():
-    interval = INTERVAL
+    #interval = INTERVAL
     prev_count_R = 0
     prev_count_L = 0
 
@@ -87,13 +87,12 @@ class MotorEncoder():
         observation_covariance = np.load(os.path.join(data_path, 'observation_covariance.npy'))
         transition_matrices = np.load(os.path.join(data_path, 'transition_matrices.npy'))
         transition_covariance = np.load(os.path.join(data_path, 'transition_covariance.npy'))
-        print(observation_covariance)
 
         # Initializing Kalman filter
         N_STATE = 10
-        self.current_state_mean_L = np.ones(N_STATE)
+        self.current_state_mean_L = np.zeros(N_STATE)
         self.current_state_covariance_L = np.ones((N_STATE, N_STATE))
-        self.current_state_mean_R = np.ones(N_STATE)
+        self.current_state_mean_R = np.zeros(N_STATE)
         self.current_state_covariance_R = np.ones((N_STATE, N_STATE))
 
         self.kf = KalmanFilter(
@@ -106,23 +105,23 @@ class MotorEncoder():
             transition_matrices = transition_matrices,
             transition_covariance = transition_covariance)
 
-    def get_motor_speed(self):
+    def get_motor_speed(self, dt):
         global count_R
         global count_L
 
-        vel_R = ((count_R - self.prev_count_R)/40/self.interval) * 2*math.pi * WHEEL_RADIUS
-        vel_L = ((count_L - self.prev_count_L)/40/self.interval) * 2*math.pi * WHEEL_RADIUS
+        vel_R = ((count_R - self.prev_count_R)/40/dt) * 2*math.pi * WHEEL_RADIUS
+        vel_L = ((count_L - self.prev_count_L)/40/dt) * 2*math.pi * WHEEL_RADIUS
         self.prev_count_R = count_R 
         self.prev_count_L = count_L
-        # print(f'Motor speed (m/s) Left={vel_L}, Right={vel_R}, Angular speed (rad/s) Left={ang_L}, Right={ang_R}')
+        # print(f'Motor speed (m/s) Left={vel_L}, Right={vel_R}')
         return (vel_L, vel_R)  # Return velocity (m/s)
 
-    def get_motor_speed_kf(self):
+    def get_motor_speed_kf(self, dt):
         global count_R
         global count_L
 
-        vel_R = ((count_R - self.prev_count_R)/40/self.interval) * 2*math.pi * WHEEL_RADIUS
-        vel_L = ((count_L - self.prev_count_L)/40/self.interval) * 2*math.pi * WHEEL_RADIUS
+        vel_R = ((count_R - self.prev_count_R)/40/dt) * 2*math.pi * WHEEL_RADIUS
+        vel_L = ((count_L - self.prev_count_L)/40/dt) * 2*math.pi * WHEEL_RADIUS
         self.prev_count_R = count_R 
         self.prev_count_L = count_L
 
@@ -130,16 +129,17 @@ class MotorEncoder():
         self.current_state_mean_L, self.current_state_covariance_L = self.kf.filter_update(
             self.current_state_mean_L, 
             self.current_state_covariance_L, 
-            observation=vel_L)
+            observation = vel_L)
         vel_L_kf = self.kf.observation_matrices.dot(self.current_state_mean_L)
 
         self.current_state_mean_R, self.current_state_covariance_R = self.kf.filter_update(
             self.current_state_mean_R, 
             self.current_state_covariance_R, 
-            observation=vel_R)
+            observation = vel_R)
         vel_R_kf = self.kf.observation_matrices.dot(self.current_state_mean_R)
 
-        return (vel_L_kf, vel_R_kf)  # Return velocity (m/s)
+        # print(f'Motor speed (m/s) Left={vel_L_kf}, Right={vel_R_kf}')
+        return (vel_L_kf.item(), vel_R_kf.item())  # Return velocity (m/s)
 
     
 
@@ -149,7 +149,7 @@ class MotorEncoder():
 class PID():
     error_P_prev = 0.0
     error_I = 0.0
-    interval = INTERVAL
+    # interval = INTERVAL
     Kp = 80
     Ki = 100
     Kd = 0.1
@@ -161,11 +161,11 @@ class PID():
         self.error_P_prev = 0.0
         self.error_I = 0.0
 
-    def get_manipulating_var(self, tar_speed, cur_speed) -> float:
+    def get_manipulating_var(self, tar_speed, cur_speed, dt) -> float:
         mv = 0.0
         error_P = tar_speed - cur_speed
-        self.error_I += error_P * self.interval 
-        error_D = (error_P - self.error_P_prev) / self.interval
+        self.error_I += error_P * dt 
+        error_D = (error_P - self.error_P_prev) / dt
         
         mv = self.Kp*error_P + self.Ki*self.error_I + self.Kd*error_D
 
@@ -194,12 +194,12 @@ class WheelOdom():
     right = 0.0
     velocity = 0.0
 
-    interval = INTERVAL
+    #interval = INTERVAL
 
     def __init__(self):
         ...
 
-    def dead_reckoning(self, vel_L, vel_R):
+    def dead_reckoning(self, vel_L, vel_R, dt):
         self.left = vel_L
         self.right =vel_R
 
@@ -209,9 +209,9 @@ class WheelOdom():
 
         self.velocity = (vel_R + vel_L) / 2.0
 
-        self.x += self.delta_x * self.interval
-        self.y += self.delta_y * self.interval
-        self.th += self.delta_th * self.interval
+        self.x += self.delta_x * dt
+        self.y += self.delta_y * dt
+        self.th += self.delta_th * dt
 
         # print(f'###### Speed x={self.delta_x}, y={self.delta_y}, th={self.delta_th}')
         # print(f'###### Position x={self.x}, y={self.y}, th={self.th}')
@@ -246,7 +246,7 @@ class MotorController (Node):
                 CTRL_FREQ)
 
         ## For debugging
-        # self.pub2 = self.create_publisher(MotorSpeed, 'motor_speed', CTRL_FREQ)
+        self.pub2 = self.create_publisher(MotorSpeed, 'motor_speed', CTRL_FREQ)
 
         self.timer = self.create_timer(INTERVAL, self.odom_publisher_cb)
 
@@ -294,10 +294,10 @@ class MotorController (Node):
         self.get_logger().info(f'x={self.od.x} y={self.od.y}, th={self.od.th}, velocity={self.od.velocity}, angular speed={self.od.delta_th}')
 
         ## For debugging
-        # ms = MotorSpeed()
-        # ms.left = self.od.left
-        # ms.right = self.od.right
-        # self.pub2.publish(ms)
+        ms = MotorSpeed()
+        ms.left = self.od.left
+        ms.right = self.od.right
+        self.pub2.publish(ms)
 
 
     def drive(self):
@@ -314,10 +314,16 @@ class MotorController (Node):
         # Data collection for Kalman filter
         # f = open('data.csv', 'w', encoding='UTF-8')
 
+        time_prev = self.get_clock().now().nanoseconds
+
         while rclpy.ok():
+            time_cur = self.get_clock().now().nanoseconds
+            dt = (time_cur - time_prev) * 1e-9
+            time_prev = time_cur
+
             back_flg_R = 1.0
             back_flg_L = 1.0
-            self.motor_speed_L, self.motor_speed_R = enc.get_motor_speed_kf()
+            self.motor_speed_L, self.motor_speed_R = enc.get_motor_speed_kf(dt)
 
             if self.target_speed_L < 0.01 and self.target_speed_L > -0.01:
                 motor_L.stop()
@@ -325,7 +331,7 @@ class MotorController (Node):
             else:
                 if self.target_speed_L <0:
                     back_flg_L = -1.0
-                mv_L = pid_L.get_manipulating_var(self.target_speed_L, back_flg_L*self.motor_speed_L)
+                mv_L = pid_L.get_manipulating_var(self.target_speed_L, back_flg_L*self.motor_speed_L, dt)
                 motor_L.set_manipulating_var(mv_L * 0.90) # Calibration by multipling coeff
 
             if self.target_speed_R < 0.01 and self.target_speed_R > -0.01:
@@ -334,11 +340,11 @@ class MotorController (Node):
             else:
                 if self.target_speed_R <0:
                     back_flg_R = -1.0
-                mv_R = pid_R.get_manipulating_var(self.target_speed_R, back_flg_R*self.motor_speed_R)
+                mv_R = pid_R.get_manipulating_var(self.target_speed_R, back_flg_R*self.motor_speed_R, dt)
                 motor_R.set_manipulating_var(mv_R) 
             
 
-            self.od.dead_reckoning(back_flg_L*self.motor_speed_L, back_flg_R*self.motor_speed_R)
+            self.od.dead_reckoning(back_flg_L*self.motor_speed_L, back_flg_R*self.motor_speed_R, dt)
 
             # Data collection for Kalman filter
             # print(f'{self.motor_speed_L},{self.motor_speed_R}', file=f)
