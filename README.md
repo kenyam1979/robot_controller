@@ -37,7 +37,8 @@
 - WheelOdom
   - This calculates vehicle position and pose through deadreckoning
 - MotorController
-  - This is a node to regulate motors with target speed from 
+  - This is a node to regulate motors with target speed from a teleop controller
+  - This publishes odometory information
 
 ### Experiments for Kalman filter
 
