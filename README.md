@@ -13,9 +13,9 @@
 ### Topics
 
 - Publish
-  - Odom
+  - /odom
 - Subscribe
-  - cmd_vel
+  - /cmd_vel
 
 
 ### Class definition
