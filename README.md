@@ -5,12 +5,19 @@
 - 2-wheel differencial drive robot
   - Motor drive: https://www.amazon.co.jp/dp/B083DT2DMV?ref=ppx_yo2ov_dt_b_fed_asin_title
   - Photo encoder: https://www.amazon.co.jp/dp/B084VP1GXS?ref=ppx_yo2ov_dt_b_fed_asin_title
-  - Motor, chasis, tires: 
+  - Motor, chasis, tires
+- Computer
+  - Raspberry pi 4B 8GB: https://www.amazon.co.jp/dp/B09G376N9L?ref=ppx_yo2ov_dt_b_fed_asin_title
+- Sensors
+  - Rplidar A1M8: https://www.amazon.co.jp/gp/product/B07ZD4ML34/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1
+- Battery
+  - Elecom mobile battery: https://www.amazon.co.jp/dp/B0CTZG7Q8Q?ref=ppx_yo2ov_dt_b_fed_asin_title  
 
+## Software
 
-## motor_controller
+### motor_controller
 
-### Topics
+#### Topics
 
 - Publish
   - /odom
@@ -18,7 +25,7 @@
   - /cmd_vel
 
 
-### Class definition
+#### Class definition
 - Motor
   - This initiates physical motors with pin numbers of raspberry pi
   - This also send values to control physical motors
@@ -32,7 +39,7 @@
 - MotorController
   - This is a node to regulate motors with target speed from 
 
-## Experiments for Kalman filter
+### Experiments for Kalman filter
 
 This uses pykalman for implementation of Kalman filter. The link below is to experiment its performance using data collected from the vehicle
 
