@@ -242,11 +242,11 @@ class MotorController (Node):
         self.tfb = TransformBroadcaster(self)
         self.pub1 = self.create_publisher(
                 Odometry, 
-                'odom', 
+                'robot/odom', 
                 CTRL_FREQ)
 
         ## For debugging
-        self.pub2 = self.create_publisher(MotorSpeed, 'motor_speed', CTRL_FREQ)
+        # self.pub2 = self.create_publisher(MotorSpeed, 'motor_speed', CTRL_FREQ)
 
         self.timer = self.create_timer(INTERVAL, self.odom_publisher_cb)
 
@@ -294,10 +294,10 @@ class MotorController (Node):
         self.get_logger().info(f'x={self.od.x} y={self.od.y}, th={self.od.th}, velocity={self.od.velocity}, angular speed={self.od.delta_th}')
 
         ## For debugging
-        ms = MotorSpeed()
-        ms.left = self.od.left
-        ms.right = self.od.right
-        self.pub2.publish(ms)
+        # ms = MotorSpeed()
+        # ms.left = self.od.left
+        # ms.right = self.od.right
+        # self.pub2.publish(ms)
 
 
     def drive(self):
