@@ -239,10 +239,10 @@ class MotorController (Node):
                 CTRL_FREQ)
 
 
-        self.tfb = TransformBroadcaster(self)
+        # self.tfb = TransformBroadcaster(self)
         self.pub1 = self.create_publisher(
                 Odometry, 
-                'robot/odom', 
+                'wheel/odom', 
                 CTRL_FREQ)
 
         ## For debugging
@@ -261,15 +261,15 @@ class MotorController (Node):
         qt = Quaternion(x=qt_tmp[0], y=qt_tmp[1], z=qt_tmp[2], w=qt_tmp[3])
 
         # Send tf
-        tfs = TransformStamped()
-        tfs.header.stamp = now.to_msg()
-        tfs.header.frame_id = 'odom'
-        tfs.child_frame_id = 'base_link'
-        tfs.transform.translation.x = self.od.x
-        tfs.transform.translation.y = self.od.y
-        tfs.transform.translation.z = 0.0
-        tfs.transform.rotation = qt
-        self.tfb.sendTransform(tfs)
+        # tfs = TransformStamped()
+        # tfs.header.stamp = now.to_msg()
+        # tfs.header.frame_id = 'odom'
+        # tfs.child_frame_id = 'base_link'
+        # tfs.transform.translation.x = self.od.x
+        # tfs.transform.translation.y = self.od.y
+        # tfs.transform.translation.z = 0.0
+        # tfs.transform.rotation = qt
+        # self.tfb.sendTransform(tfs)
 
         # Send odom
         odom = Odometry()
