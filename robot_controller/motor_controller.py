@@ -291,7 +291,7 @@ class MotorController (Node):
         self.pub1.publish(odom)
 
 
-        self.get_logger().info(f'x={self.od.x} y={self.od.y}, th={self.od.th}, velocity={self.od.velocity}, angular speed={self.od.delta_th}')
+        # self.get_logger().info(f'x={self.od.x} y={self.od.y}, th={self.od.th}, velocity={self.od.velocity}, angular speed={self.od.delta_th}')
 
         ## For debugging
         # ms = MotorSpeed()
