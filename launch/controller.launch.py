@@ -32,7 +32,7 @@ def generate_launch_description():
     # Launch IMU sensor
     imu_launch = IncludeLaunchDescription(
         PathJoinSubstitution(
-            [imu_pkg_share, "launch", "imu.launch.py"]))
+            [imu_pkg_share, "imu.launch.py"]))
 
     # Launch robot_state_publisher and localization
     robot_launch = IncludeLaunchDescription(
