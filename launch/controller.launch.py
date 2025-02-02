@@ -42,7 +42,7 @@ def generate_launch_description():
     # Launch teleop
     teleop_launch = IncludeLaunchDescription(
         PathJoinSubstitution(
-            [controller_pkg_share, "launch", "teleop_launch.py"]))
+            [controller_pkg_share, "teleop_launch.py"]))
 
     # Run motor_controller node
     controller_node = Node(
