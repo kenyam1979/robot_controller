@@ -29,7 +29,7 @@ def generate_launch_description():
             'config_filepath', 
             default_value=[
                 launch.substitutions.TextSubstitution(
-                    text=os.path.join(get_package_share_directory('robot_controller'), 'config', '')),
+                    text=os.path.join(get_package_share_directory('robot_controller'))),
                 joy_config, launch.substitutions.TextSubstitution(text='.config.yaml')]),
 
         launch_ros.actions.Node(
